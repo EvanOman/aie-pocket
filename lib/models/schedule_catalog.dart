@@ -33,8 +33,10 @@ class ScheduleEvent {
     timezone: json['timezone'] as String,
     sourceUrl: json['sourceUrl'] as String,
     days: List.unmodifiable(
-      (json['days'] as List).map(
-        (day) => EventDay.fromJson(Map<String, dynamic>.from(day as Map)),
+      (json['days'] as List<Object?>).map(
+        (day) => EventDay.fromJson(
+          Map<String, dynamic>.from(day as Map<Object?, Object?>),
+        ),
       ),
     ),
   );
@@ -61,14 +63,18 @@ class ScheduleCatalog {
   factory ScheduleCatalog.fromJson(Map<String, dynamic> json) =>
       ScheduleCatalog(
         event: ScheduleEvent.fromJson(
-          Map<String, dynamic>.from(json['event'] as Map),
+          Map<String, dynamic>.from(json['event'] as Map<Object?, Object?>),
         ),
-        talks: (json['talks'] as List)
+        talks: (json['talks'] as List<Object?>)
             .map(
-              (talk) => Talk.fromJson(Map<String, dynamic>.from(talk as Map)),
+              (talk) => Talk.fromJson(
+                Map<String, dynamic>.from(talk as Map<Object?, Object?>),
+              ),
             )
             .toList(),
-        recommendedIds: Set<String>.from(json['recommendedIds'] as List? ?? []),
+        recommendedIds: Set<String>.from(
+          json['recommendedIds'] as List<Object?>? ?? [],
+        ),
       );
 
   static Future<ScheduleCatalog> load() async => ScheduleCatalog.fromJson(

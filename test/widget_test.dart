@@ -30,7 +30,7 @@ void main() {
   setUpAll(() async {
     catalogue = await ScheduleCatalog.load();
   });
-  testWidgets('choose, inspect and clear real talks at phone width', (
+  testWidgets('phone selection, preview, and clear confirmation', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -72,6 +72,13 @@ void main() {
     await tester.ensureVisible(find.text('My talks'));
     await tester.tap(find.text('My talks'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Clear'));
+    await tester.tap(find.text('Clear'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Keep talks'));
+    await tester.pumpAndSettle();
+    expect(controller.selected.length, 37);
+    expect(store.value!.selectedIds.length, 37);
     await tester.ensureVisible(find.text('Clear'));
     await tester.tap(find.text('Clear'));
     await tester.pumpAndSettle();

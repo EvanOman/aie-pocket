@@ -32,7 +32,7 @@ class PreferencesScheduleStore implements ScheduleStore {
       throw const FormatException('Unsupported saved schedule version.');
     }
     return StoredSchedule(
-      selectedIds: List<String>.from(json['selectedIds'] as List),
+      selectedIds: List<String>.from(json['selectedIds'] as List<Object?>),
       revision: json['revision'] as int,
     );
   }

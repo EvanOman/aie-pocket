@@ -6,14 +6,14 @@ cd "$(dirname "$0")/.."
 for tool in flutter xcodebuild pod ruby; do
   command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
 done
-ruby -e 'require "xcodeproj"' || { echo 'Install xcodeproj: gem install xcodeproj -v 1.27.0 --user-install' >&2; exit 1; }
+ruby -e 'require "xcodeproj"' || { echo 'Install locked Apple tools with bundle install; run this script through bundle exec.' >&2; exit 1; }
 # A fresh clone has no generated plugin registrant; pub get creates it before
 # the project checker validates every source reference.
-flutter pub get
+flutter pub get --enforce-lockfile
 ruby scripts/configure_apple.rb --check
 ./scripts/check_swift.sh
-flutter build ios --config-only --simulator
-pod install --project-directory=ios
+flutter build ios --no-pub --config-only --simulator
+pod install --deployment --project-directory=ios
 xcodebuild -project ios/Runner.xcodeproj -scheme AIEWatch \
   -configuration Debug -destination 'generic/platform=watchOS Simulator' \
   CODE_SIGNING_ALLOWED=NO build

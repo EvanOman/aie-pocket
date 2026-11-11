@@ -1,5 +1,7 @@
 # AIE Pocket
 
+[![CI](https://github.com/EvanOman/aie-pocket/actions/workflows/ci.yml/badge.svg)](https://github.com/EvanOman/aie-pocket/actions/workflows/ci.yml)
+
 Choose conference talks on your iPhone, then swipe through their title, presenter, location, and time on Apple Watch. AIE Pocket pairs a Flutter companion with a native SwiftUI watch app and WidgetKit complications.
 
 - Offline snapshot of 112 AI Engineer Code 2026 sessions, November 10–12, with an optional 37-session suggested path.
@@ -30,7 +32,7 @@ flutter run -d chrome
 
 The browser runs the companion and a watch preview with browser-local choices. Actual watch synchronization requires the installed iPhone app. No application server or user account is required.
 
-The check script runs Flutter analysis, behavior tests, and a release web build; it also checks the Xcode project when Ruby's `xcodeproj` gem is available. The static build in `build/web` uses `/` as its base path. Set `WEB_BASE_HREF=/aie-pocket/ ./scripts/check.sh` when deploying under that subpath.
+The check script enforces the Dart lockfile, checks formatting and strict analysis, runs behavior tests with coverage, and builds the web release. It also checks the Xcode project when the locked Ruby tools are available. See [testing and CI](docs/TESTING.md) for `just fc`, the separate `just fix` command, and the Flutter, Swift, and unsigned Apple build jobs. The static build in `build/web` uses `/` as its base path. Set `WEB_BASE_HREF=/aie-pocket/ ./scripts/check.sh` when deploying under that subpath.
 
 For iPhone and watch builds, use a Mac with Xcode, CocoaPods, and Ruby `xcodeproj`: follow [build and installation](docs/BUILD.md). Flutter does not target watchOS; the native watch target is already included in the Xcode project.
 

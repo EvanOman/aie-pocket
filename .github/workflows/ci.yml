@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FLUTTER_VERSION: '3.38.10'
+  BUNDLE_FROZEN: 'true'
+  REQUIRE_APPLE_PROJECT_CHECK: '1'
+
+jobs:
+  flutter:
+    name: Flutter analysis, tests, and web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - uses: ruby/setup-ruby@aad2d1c00761d58c8c408393cea6f6f998991eaf # v1, 2026-10-31
+        with:
+          ruby-version: '3.3.12'
+          bundler-cache: true
+      - name: Format, analyze, test, build, and check Apple project
+        run: bundle exec ./scripts/check.sh
+      - name: Check that validation preserved tracked files
+        run: git diff --exit-code
+      - name: Save Dart coverage
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dart-coverage
+          path: coverage/lcov.info
+          if-no-files-found: warn
+          retention-days: 14
+
+  swift:
+    name: Swift snapshot and cache tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: swift:6.0.3-jammy@sha256:95f6ef898992dc840b35517e780f6f6db9661432775ab0b33cc0a531ea749bdb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test portable native behavior and parse Swift sources
+        run: ./scripts/check_swift.sh
+
+  apple:
+    name: Unsigned iPhone and watchOS builds
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - uses: ruby/setup-ruby@aad2d1c00761d58c8c408393cea6f6f998991eaf # v1, 2026-10-31
+        with:
+          ruby-version: '3.3.12'
+          bundler-cache: true
+      - name: Compile all Apple targets without signing credentials
+        shell: bash
+        run: |
+          set -o pipefail
+          bundle exec ./scripts/check_apple_on_mac.sh 2>&1 | tee apple-build.log
+      - name: Check that validation preserved tracked files
+        run: git diff --exit-code
+      - name: Save Apple build log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apple-build-log
+          path: apple-build.log
+          if-no-files-found: warn
+          retention-days: 7

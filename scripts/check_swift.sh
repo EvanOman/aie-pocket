@@ -7,5 +7,5 @@ trap 'rm -rf "$check_dir"' EXIT
 swiftc watch/Shared/ScheduleSnapshot.swift watch/Tests/SnapshotChecks.swift -o "$check_dir/snapshot-checks"
 "$check_dir/snapshot-checks" assets/schedule.json
 swiftc -frontend -parse watch/Shared/ScheduleSnapshot.swift watch/App/*.swift \
-  watch/Complication/*.swift ios/Runner/AppDelegate.swift ios/Runner/ScheduleBridge.swift
+  watch/Complication/*.swift watch/UITests/*.swift ios/Runner/AppDelegate.swift ios/Runner/ScheduleBridge.swift
 echo 'PASS: Swift source syntax. Apple framework type checking and runtime behavior still require Xcode.'

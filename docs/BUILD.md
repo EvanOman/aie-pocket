@@ -4,7 +4,7 @@ The companion is Flutter. The watch app and its watch-face complication are nati
 
 ## Mac setup
 
-Use Flutter **3.38.10** with Dart **3.10.9**, Xcode with iOS and watchOS SDKs, CocoaPods, and Ruby with the `xcodeproj` gem. The recorded Mac setup used CocoaPods **1.17.0**, Ruby **3.3.12**, and xcodeproj **1.28.1**. The app targets iOS 13+ and watchOS 10+.
+Use Flutter **3.38.10** with Dart **3.10.9**, Xcode with iOS and watchOS SDKs, CocoaPods, and Ruby with the `xcodeproj` gem. The recorded Mac setup used CocoaPods **1.17.0**, Ruby **3.3.12**, and xcodeproj **1.28.1**. `Gemfile.lock` pins the Ruby tools and their dependencies; install them with Bundler 2.6.9 (`gem install bundler -v 2.6.9`) and use `bundle exec` for project commands. The app targets iOS 13+ and watchOS 10+.
 
 Keep Flutter pinned for reproducibility. During development, Flutter 3.47.5 attempted to raise the iOS deployment target to 15 and add Swift Package Manager integration. This project retains Flutter 3.38.10's CocoaPods setup.
 
@@ -16,17 +16,18 @@ export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 flutter --version
 xcodebuild -version
 xcodebuild -showsdks
-pod --version
-ruby -e 'require "xcodeproj"; puts Xcodeproj::VERSION'
+bundle install
+bundle exec pod --version
+bundle exec ruby -e 'require "xcodeproj"; puts Xcodeproj::VERSION'
 ```
 
 Run from the repository root:
 
 ```bash
-flutter pub get
-flutter build ios --config-only --simulator
-pod install --project-directory=ios
-./scripts/check.sh
+flutter pub get --enforce-lockfile
+flutter build ios --no-pub --config-only --simulator
+bundle exec pod install --deployment --project-directory=ios
+bundle exec ./scripts/check.sh
 ```
 
 `flutter pub get` generates the excluded plugin registrant needed by the static Xcode project check. No signing account is needed for simulator builds. The watch targets use only system frameworks.
@@ -36,7 +37,7 @@ pod install --project-directory=ios
 Run the complete Mac preflight:
 
 ```bash
-./scripts/check_apple_on_mac.sh
+bundle exec ./scripts/check_apple_on_mac.sh
 ```
 
 It generates Flutter configuration, installs the locked CocoaPods dependencies, checks the shared Swift model and Xcode graph, and builds the watch and companion for simulators without signing. It exits immediately on Linux. Compilation does not establish schedule delivery or App Group runtime behavior.
@@ -45,7 +46,7 @@ For individual checks:
 
 ```bash
 ./scripts/check_swift.sh
-ruby scripts/configure_apple.rb --check
+bundle exec ruby scripts/configure_apple.rb --check
 
 xcodebuild -project ios/Runner.xcodeproj -scheme AIEWatch \
   -configuration Debug -destination 'generic/platform=watchOS Simulator' \
@@ -111,7 +112,7 @@ Open the result bundle in Xcode for assertions and screenshot attachments `01-fi
 Use your own Apple signing team and unique bundle identifiers. Complete account sign-in, device trust, pairing, and Developer Mode steps in Xcode and on the devices. The checked-in project uses placeholder identifiers and contains no signing credentials.
 
 ```bash
-BUNDLE_ID=com.yourname.aiepocket DEVELOPMENT_TEAM=YOURTEAMID ruby scripts/configure_apple.rb
+BUNDLE_ID=com.yourname.aiepocket DEVELOPMENT_TEAM=YOURTEAMID bundle exec ruby scripts/configure_apple.rb
 open ios/Runner.xcworkspace
 ```
 

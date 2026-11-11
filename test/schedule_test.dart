@@ -158,6 +158,110 @@ void main() {
       expect((await bridge.status()).state, 'preview');
       expect(called, isFalse);
     });
+
+    test('a missing native response is unavailable, never delivered', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (_) async => null);
+      final bridge = PlatformWatchBridge();
+
+      for (final status in [
+        await bridge.status(),
+        await bridge.publish('{"schemaVersion":1,"talks":[]}'),
+      ]) {
+        expect(status.state, 'unavailable');
+        expect(status.message, 'Watch status is unavailable.');
+      }
+    });
+
+    test(
+      'missing plugin leaves the companion usable and choices saved',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        final catalog = fixtureCatalog();
+        final store = FakeStore();
+        final controller = ScheduleController(
+          catalog: catalog,
+          store: store,
+          bridge: PlatformWatchBridge(),
+        );
+        addTearDown(controller.dispose);
+
+        await controller.initialize();
+        expect(controller.isLoaded, isTrue);
+        expect(controller.syncStatus.state, 'error');
+        await controller.toggle(catalog.talks.first);
+
+        expect(store.stored!.selectedIds, ['early']);
+        expect(controller.selectedIds, {'early'});
+        expect(controller.error, contains('Saved on this phone'));
+        expect(controller.isSaving, isFalse);
+      },
+    );
+
+    test(
+      'malformed native status preserves choices and retry recovers',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        var malformed = true;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+              if (call.method == 'publishSchedule' && malformed) {
+                return {'state': 7, 'message': 'Invalid response'};
+              }
+              return {'state': 'queued', 'message': 'Queued for watch'};
+            });
+        final catalog = fixtureCatalog();
+        final store = FakeStore();
+        final controller = ScheduleController(
+          catalog: catalog,
+          store: store,
+          bridge: PlatformWatchBridge(),
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await controller.toggle(catalog.talks.first);
+
+        expect(store.stored!.selectedIds, ['early']);
+        expect(controller.error, contains('Watch sync failed'));
+        expect(controller.syncStatus.state, 'error');
+        malformed = false;
+        await controller.sync();
+        expect(controller.error, isNull);
+        expect(controller.selectedIds, {'early'});
+        expect(controller.syncStatus.state, 'queued');
+      },
+    );
+
+    test(
+      'a native error result is shown without discarding durable choices',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+              channel,
+              (_) async => {
+                'state': 'error',
+                'message': 'Watch is not paired.',
+              },
+            );
+        final catalog = fixtureCatalog();
+        final store = FakeStore();
+        final controller = ScheduleController(
+          catalog: catalog,
+          store: store,
+          bridge: PlatformWatchBridge(),
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await controller.toggle(catalog.talks.first);
+
+        expect(controller.error, 'Watch is not paired.');
+        expect(controller.syncStatus.state, 'error');
+        expect(store.stored!.selectedIds, ['early']);
+        expect(controller.selectedIds, {'early'});
+      },
+    );
   });
 
   group('Talk', () {
@@ -196,7 +300,60 @@ void main() {
       expect(overlap.conflictsWith(first), isTrue);
       expect(first.conflictsWith(first), isFalse);
     });
+
+    test('rejects ambiguous timezone and non-positive duration', () {
+      expect(
+        () => Talk.fromJson(
+          talkJson('missing-offset', start: '2026-11-10T09:00:00'),
+        ),
+        throwsFormatException,
+      );
+      for (final end in [
+        '2026-11-10T09:00:00-08:00',
+        '2026-11-10T08:59:00-08:00',
+      ]) {
+        expect(
+          () => Talk.fromJson(talkJson('invalid-duration', end: end)),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test('labels midnight and noon without leaking device timezone', () {
+      final midnight = Talk.fromJson(
+        talkJson(
+          'midnight',
+          start: '2026-11-10T00:00:00-08:00',
+          end: '2026-11-10T00:30:00-08:00',
+        ),
+      );
+      final noon = Talk.fromJson(
+        talkJson(
+          'noon',
+          start: '2026-11-10T11:45:00-08:00',
+          end: '2026-11-10T12:15:00-08:00',
+        ),
+      );
+
+      expect(midnight.timeLabel, '12:00–12:30 AM');
+      expect(noon.timeLabel, '11:45 AM–12:15 PM');
+    });
   });
+
+  test(
+    'catalogue rejects duplicate source IDs before selections can collide',
+    () {
+      final catalog = fixtureCatalog();
+      expect(
+        () => ScheduleCatalog(
+          event: catalog.event,
+          talks: [catalog.talks.first, catalog.talks.first],
+          recommendedIds: {},
+        ),
+        throwsFormatException,
+      );
+    },
+  );
 
   test(
     'bundled catalogue recommendations produce a valid watch snapshot',
@@ -279,6 +436,41 @@ void main() {
     tearDown(() => controller.dispose());
 
     Talk talk(String id) => catalog.talks.firstWhere((talk) => talk.id == id);
+
+    test(
+      'edits before loading and unknown source IDs do not persist or publish',
+      () async {
+        await controller.toggle(talk('early'));
+        await controller.useRecommended();
+        await controller.clear();
+        await controller.sync();
+        expect(store.saves, isEmpty);
+        expect(bridge.snapshots, isEmpty);
+
+        await controller.initialize();
+        await controller.toggle(Talk.fromJson(talkJson('unknown')));
+        expect(controller.selected, isEmpty);
+        expect(store.saves, isEmpty);
+        expect(bridge.snapshots, isEmpty);
+      },
+    );
+
+    test(
+      'restoring only removed IDs sends an empty replacement to the watch',
+      () async {
+        store.stored = StoredSchedule(
+          selectedIds: ['removed-talk'],
+          revision: 44,
+        );
+
+        await controller.initialize();
+
+        expect(controller.selected, isEmpty);
+        expect(store.stored!.selectedIds, isEmpty);
+        expect(bridge.snapshots.single['talks'], isEmpty);
+        expect(bridge.snapshots.single['revision'] as int, greaterThan(44));
+      },
+    );
 
     test(
       'failed initialization can be retried after storage recovers',
